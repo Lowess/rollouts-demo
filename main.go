@@ -15,6 +15,9 @@ import (
 	"strconv"
 	"syscall"
 	"time"
+
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 const (
@@ -39,6 +42,20 @@ var (
 	}
 	envLatency   float64
 	envErrorRate int
+)
+
+var (
+	colorRequestCounter = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "http_requests_total",
+			Help: "Count of all HTTP requests",
+		},
+		[]string{"code", "method"})
+
+	colorRequestDuration = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Name: "http_request_duration_seconds",
+		Help: "Duration of all HTTP requests",
+	}, []string{"code", "method"})
 )
 
 func init() {
@@ -74,9 +91,16 @@ func main() {
 
 	rand.Seed(time.Now().UnixNano())
 
+	// Promtheus metrics
+	prometheus.MustRegister(colorRequestCounter)
+	prometheus.MustRegister(colorRequestDuration)
+
 	router := http.NewServeMux()
 	router.Handle("/", http.StripPrefix("/", http.FileServer(http.Dir("./"))))
-	router.HandleFunc("/color", getColor)
+	router.Handle("/metrics", promhttp.Handler())
+
+	colorHandler := http.HandlerFunc(getColor)
+	router.Handle("/color", promhttp.InstrumentHandlerDuration(colorRequestDuration, promhttp.InstrumentHandlerCounter(colorRequestCounter, colorHandler)))
 
 	server := &http.Server{
 		Addr:    listenAddr,

@@ -37,7 +37,7 @@ load-tester-image:
 
 .PHONY: run
 run:
-	go run main.go
+	go run *.go
 
 .PHONY: lint
 lint:
